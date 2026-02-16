@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Plus, Trash2, TrendingUp, PieChart } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -71,29 +72,44 @@ export function PortfolioWidget({ widget }: { widget: DashboardWidget }) {
                 </div>
             </div>
 
-            {/* Asset Distribution Bar */}
-            {totalValue > 0 && (
-                <div className="space-y-2">
-                    <div className="flex h-2 w-full rounded-full overflow-hidden">
-                        {assets.map((asset, i) => (
-                            <div
-                                key={asset.id}
-                                className={cn("h-full", asset.color || 'bg-slate-300')}
-                                style={{ width: `${(asset.value / totalValue) * 100}%` }}
-                                title={`${asset.name}: %${((asset.value / totalValue) * 100).toFixed(1)}`}
+            {/* Allocation Chart */}
+            {assets.length > 0 && (
+                <div className="h-[180px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                                data={assets}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={50}
+                                outerRadius={70}
+                                paddingAngle={2}
+                                dataKey="value"
+                            >
+                                {assets.map((entry, index) => {
+                                    const typeInfo = ASSET_TYPES.find(t => t.value === entry.type);
+                                    // Map tailwind bg colors to hex for Recharts
+                                    const colorMap: Record<string, string> = {
+                                        'bg-emerald-500': '#10b981',
+                                        'bg-amber-400': '#fbbf24',
+                                        'bg-indigo-500': '#6366f1',
+                                        'bg-rose-500': '#f43f5e',
+                                        'bg-slate-500': '#64748b',
+                                        'bg-blue-500': '#3b82f6',
+                                    };
+                                    return <Cell key={`cell-${index}`} fill={colorMap[typeInfo?.color || ''] || '#cbd5e1'} />;
+                                })}
+                            </Pie>
+                            <RechartsTooltip
+                                formatter={(value: number) => `₺${value.toLocaleString('tr-TR')}`}
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                             />
-                        ))}
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-[10px]">
-                        {ASSET_TYPES.filter(t => assets.some(a => a.type === t.value)).map(type => (
-                            <div key={type.value} className="flex items-center gap-1">
-                                <div className={cn("w-2 h-2 rounded-full", type.color)} />
-                                <span className="font-medium text-slate-600">{type.label}</span>
-                            </div>
-                        ))}
-                    </div>
+                        </PieChart>
+                    </ResponsiveContainer>
                 </div>
             )}
+
+
 
             {/* Asset List */}
             <div className="space-y-2 max-h-[120px] overflow-y-auto pr-1">

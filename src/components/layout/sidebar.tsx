@@ -29,7 +29,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 
-const menuItemsData: Record<View, { label: string; icon: any }> = {
+const menuItemsData: Partial<Record<View, { label: string; icon: any }>> = {
   overview: { label: 'Genel Bakış', icon: LayoutDashboard },
   templates: { label: 'Şablonlar', icon: LayoutTemplate },
   library: { label: 'Kütüphane', icon: Library },

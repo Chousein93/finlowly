@@ -28,102 +28,9 @@ interface SharedTemplateCardProps {
     onClick?: () => void;
 }
 
-function MiniChart({ color = 'emerald' }: { color?: string }) {
-    return (
-        <div className="w-full h-12 flex items-end gap-1 mt-4 px-2">
-            {[40, 70, 45, 90, 65, 80, 50, 95].map((height, i) => (
-                <div
-                    key={i}
-                    className={cn(
-                        "flex-1 rounded-t-sm transition-all duration-1000 ease-out animate-in slide-in-from-bottom-full delay-[var(--delay)]",
-                        color === 'emerald' ? "bg-emerald-500/20 group-hover:bg-emerald-500" : "bg-slate-900/20 group-hover:bg-slate-900"
-                    )}
-                    style={{
-                        height: `${height}%`,
-                        // @ts-ignore
-                        "--delay": `${i * 50}ms`
-                    }}
-                />
-            ))}
-        </div>
-    );
-}
+// MiniChart removed — cards now show clean data without decorative graphs
 
-function DataPreview({ template }: { template: any }) {
-    const config = template.config || template.data?.config;
-    if (!config) return null;
-
-    const features = config.features || [];
-    const hasCharts = features.includes('Grafikler') || features.includes('Trendler') || features.includes('İstatistikler');
-
-    // 1. Progress Bar Logic (for Goals/Funds)
-    if (config.targetAmount && config.currentAmount !== undefined) {
-        const percentage = Math.min(Math.round((config.currentAmount / config.targetAmount) * 100), 100);
-        return (
-            <div className="w-full space-y-2 mt-4">
-                <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    <span>İlerleme</span>
-                    <span>%{percentage}</span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                        className="h-full bg-slate-900 transition-all duration-500"
-                        style={{ width: `${percentage}%` }}
-                    />
-                </div>
-                <div className="text-center font-sans font-medium text-slate-900 mt-1">
-                    {new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(config.currentAmount)}
-                    <span className="text-slate-400 text-[10px] ml-1">/ {new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(config.targetAmount)}</span>
-                </div>
-                {hasCharts && <MiniChart />}
-            </div>
-        );
-    }
-
-    // 2. Transaction Logic (Income/Expense)
-    if (config.amount !== undefined) {
-        const isIncome = config.transactionType === 'income';
-        return (
-            <div className="w-full mt-4 p-3 rounded-lg border border-slate-100 bg-slate-50/50 flex flex-col items-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                    {isIncome ? 'GELİR TUTARI' : 'GİDER TUTARI'}
-                </span>
-                <span className={cn(
-                    "font-sans font-bold text-lg",
-                    isIncome ? "text-emerald-600" : "text-rose-600"
-                )}>
-                    {isIncome ? '+' : '-'}{new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(config.amount)}
-                </span>
-                {hasCharts && <MiniChart color={isIncome ? 'emerald' : 'slate'} />}
-            </div>
-        );
-    }
-
-    // 3. Simple Summary for others
-    if (config.interestRate || config.age || hasCharts) {
-        return (
-            <div className="w-full">
-                <div className="grid grid-cols-2 gap-2 mt-4 w-full">
-                    {config.interestRate !== undefined && (
-                        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
-                            <div className="text-[8px] text-slate-400 uppercase font-bold">Faiz</div>
-                            <div className="text-xs font-bold text-slate-900">%{config.interestRate}</div>
-                        </div>
-                    )}
-                    {config.age !== undefined && (
-                        <div className="bg-slate-50 p-2 rounded border border-slate-100 text-center">
-                            <div className="text-[8px] text-slate-400 uppercase font-bold">Yaş</div>
-                            <div className="text-xs font-bold text-slate-900">{config.age}</div>
-                        </div>
-                    )}
-                </div>
-                {hasCharts && <MiniChart />}
-            </div>
-        );
-    }
-
-    return null;
-}
+// DataPreview removed for cleaner card UI
 
 export function SharedTemplateCard({
     template,
@@ -194,35 +101,36 @@ export function SharedTemplateCard({
             )}
 
             <CardHeader className="pb-3 pt-8 px-6">
-                <div className="flex flex-col items-center text-center gap-4">
+                <div className="flex flex-col items-center text-center gap-3">
                     <div className={cn(
-                        "p-3 rounded-xl border transition-all duration-300 group-hover:bg-slate-900 group-hover:border-slate-900",
-                        variant === 'trash' ? "bg-rose-50 border-rose-100" : "bg-slate-50 border-slate-100"
+                        "p-3.5 rounded-2xl border transition-all duration-300 group-hover:scale-110 group-hover:shadow-md",
+                        variant === 'trash'
+                            ? "bg-rose-50 border-rose-100 group-hover:bg-rose-500 group-hover:border-rose-500"
+                            : "bg-slate-900 border-slate-900 group-hover:bg-slate-800"
                     )}>
                         {Icon ? (
                             <Icon className={cn(
-                                "h-6 w-6 transition-colors duration-300 group-hover:text-white",
-                                variant === 'trash' ? "text-rose-400" : "text-slate-600"
+                                "h-6 w-6 transition-colors duration-300",
+                                variant === 'trash' ? "text-rose-400 group-hover:text-white" : "text-white"
                             )} />
                         ) : (
                             <div className="h-6 w-6 bg-slate-200 rounded-full" />
                         )}
                     </div>
-                    <CardTitle className="sm:text-base text-sm font-semibold text-slate-900 tracking-tight line-clamp-1">
+                    <CardTitle className="text-base font-semibold text-slate-900 tracking-tight line-clamp-1">
                         {template.title || template.data?.title}
                     </CardTitle>
                 </div>
             </CardHeader>
 
-            <CardContent className="px-6 pb-6 pt-0 flex-1 flex flex-col">
-                <p className="sm:text-sm text-xs text-slate-500 text-center leading-relaxed line-clamp-2">
+            <CardContent className="px-6 pb-5 pt-0 flex-1 flex flex-col">
+                <p className="text-xs text-slate-400 text-center leading-relaxed line-clamp-2">
                     {template.description || template.data?.description || 'Açıklama yok.'}
                 </p>
 
-                {/* Data Visualization Section */}
-                <DataPreview template={template} />
+                {/* Data Visualization Removed - Card is now unique entry point */}
 
-                <div className="mt-auto pt-6 flex items-center justify-center gap-2">
+                <div className="mt-auto pt-4 flex items-center justify-center gap-2">
                     {/* Custom Footer overrides default buttons if provided */}
                     {customFooter ? customFooter : (
                         <>
@@ -236,10 +144,10 @@ export function SharedTemplateCard({
                                         onSecondaryAction();
                                     }}
                                     className={cn(
-                                        "h-8 w-8 p-0 transition-all duration-200",
+                                        "h-9 w-9 p-0 rounded-xl transition-all duration-200",
                                         isFavorite
-                                            ? "bg-slate-900 border-slate-900 text-white hover:bg-slate-800"
-                                            : "text-slate-400 hover:border-slate-400"
+                                            ? "bg-amber-50 border-amber-200 text-amber-500 hover:bg-amber-100"
+                                            : "text-slate-300 border-slate-200 hover:border-slate-300 hover:text-slate-500"
                                     )}
                                     title={secondaryActionLabel}
                                 >
@@ -256,7 +164,7 @@ export function SharedTemplateCard({
                                         e.stopPropagation();
                                         onPrimaryAction();
                                     }}
-                                    className="h-8 w-8 p-0 transition-all duration-200 text-slate-400 hover:border-slate-400 hover:text-slate-900"
+                                    className="h-9 w-9 p-0 rounded-xl transition-all duration-200 text-slate-300 border-slate-200 hover:border-slate-400 hover:text-slate-600 hover:bg-slate-50"
                                     title={primaryActionLabel}
                                 >
                                     <PrimaryIcon className="h-4 w-4" />

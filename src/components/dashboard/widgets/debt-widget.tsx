@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Plus, Trash2, TrendingDown, ShieldAlert, CreditCard } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
+
 import { useAppStore, DashboardWidget } from '@/store/use-app-store';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -76,6 +77,28 @@ export function DebtWidget({ widget }: { widget: DashboardWidget }) {
                 </div>
             </div>
 
+            {/* Debt Visualization */}
+            {debts.length > 0 && (
+                <div className="h-[100px] w-full mt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={debts} layout="vertical" margin={{ left: 0, right: 0, top: 0, bottom: 0 }}>
+                            <XAxis type="number" hide />
+                            <YAxis dataKey="name" type="category" hide />
+                            <RechartsTooltip
+                                cursor={{ fill: 'transparent' }}
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                formatter={(value: number) => `₺${value.toLocaleString('tr-TR')}`}
+                            />
+                            <Bar dataKey="amount" radius={[0, 4, 4, 0]} barSize={20}>
+                                {debts.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill="#f43f5e" />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+
             {/* Debt List */}
             <div className="space-y-2 max-h-[120px] overflow-y-auto pr-1">
                 {debts.length === 0 && (
@@ -102,7 +125,7 @@ export function DebtWidget({ widget }: { widget: DashboardWidget }) {
                             <span className="font-bold text-slate-900">₺{debt.amount.toLocaleString()}</span>
                             <span className="text-[10px] text-slate-400">Min: ₺{debt.minPayment.toLocaleString()}</span>
                         </div>
-                        <Progress value={30} className="h-1 mt-2 bg-slate-100" indicatorClassName="bg-rose-400" />
+
                     </div>
                 ))}
             </div>

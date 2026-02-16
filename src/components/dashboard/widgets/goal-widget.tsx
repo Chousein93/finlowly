@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Plus, Minus, TrendingUp, History, Target } from 'lucide-react';
+import { AreaChart, Area, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -59,25 +60,19 @@ export function GoalWidget({ widget }: { widget: DashboardWidget }) {
                 </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="space-y-2">
-                <div className="flex justify-between text-[10px] font-bold">
-                    <span className="text-emerald-600 uppercase flex items-center gap-1">
-                        <Target className="h-3 w-3" />
-                        %{progress.toFixed(0)} Tamamlandı
-                    </span>
-                    <span className="text-slate-400">Kalan: ₺{(target - current).toLocaleString('tr-TR')}</span>
-                </div>
-                <div className="relative h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                        className="absolute left-0 top-0 h-full bg-emerald-500 transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-                        style={{ width: `${progress}%` }}
-                    />
-                </div>
-            </div>
+
 
             {/* Action Area */}
             <div className="bg-slate-50 rounded-xl p-2 border border-slate-100">
+                {/* Progress Bar */}
+                <div className="mb-4 px-1">
+                    <div className="flex justify-between text-[10px] text-slate-400 mb-1 font-medium">
+                        <span>%{progress.toFixed(1)} Tamamlandı</span>
+                        <span>{Math.max(0, target - current).toLocaleString('tr-TR')}₺ kaldı</span>
+                    </div>
+                    <Progress value={progress} className="h-2.5" indicatorClassName={progress >= 100 ? "bg-emerald-500" : "bg-blue-500"} />
+                </div>
+
                 <div className="flex items-center gap-2">
                     <div className="flex bg-white rounded-lg border border-slate-200 p-0.5 shrink-0">
                         <button
@@ -118,6 +113,34 @@ export function GoalWidget({ widget }: { widget: DashboardWidget }) {
                     </Button>
                 </div>
             </div>
+
+            {/* History Chart */}
+            {transactions.length > 1 && (
+                <div className="h-[100px] w-full mt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={[...transactions].reverse().map((t, i) => ({
+                            name: i,
+                            amount: t.amount,
+                            // This is a rough estimation of balance history for visual purposes
+                            // In a real app we'd calculate running balance properly
+                            balance: current
+                        }))}>
+                            <defs>
+                                <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <RechartsTooltip
+                                cursor={{ stroke: '#cbd5e1' }}
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                formatter={(value: number) => `₺${value.toLocaleString('tr-TR')}`}
+                            />
+                            <Area type="monotone" dataKey="amount" stroke="#10b981" fillOpacity={1} fill="url(#colorBalance)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
 
             {/* Recent History */}
             {transactions.length > 0 && (

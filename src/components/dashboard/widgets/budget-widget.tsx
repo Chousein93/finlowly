@@ -1,32 +1,40 @@
 import { useState } from 'react';
-import { Plus, TrendingUp, TrendingDown, Trash2, Wallet } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, Trash2, Wallet, Save, X, BarChart as BarChartIcon } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useAppStore, DashboardWidget } from '@/store/use-app-store';
+import { useAppStore, DashboardWidget, BudgetItem } from '@/store/use-app-store';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export function BudgetWidget({ widget }: { widget: DashboardWidget }) {
-    const { updateDashboardWidget } = useAppStore();
+    const { updateDashboardWidget, saveTempBudgetItems, cancelTempBudgetItems } = useAppStore();
     const [newItemName, setNewItemName] = useState('');
     const [newItemAmount, setNewItemAmount] = useState('');
     const [newItemType, setNewItemType] = useState<'income' | 'expense'>('expense');
 
-    // Initialize config if missing
-    const items = widget.config?.budgetItems || [];
+    // Geçici verileri kontrol et
+    const tempItems = useAppStore.getState().tempBudgetItems[widget.id] || [];
+    const currentItems = tempItems.length > 0 ? tempItems : (widget.config?.budgetItems || []);
 
-    const income = items.filter(i => i.type === 'income').reduce((sum, i) => sum + i.amount, 0);
-    const expense = items.filter(i => i.type === 'expense').reduce((sum, i) => sum + i.amount, 0);
+    const income = currentItems.filter(i => i.type === 'income').reduce((sum, i) => sum + i.amount, 0);
+    const expense = currentItems.filter(i => i.type === 'expense').reduce((sum, i) => sum + i.amount, 0);
     const balance = income - expense;
     const expenseRate = income > 0 ? (expense / income) * 100 : 0;
 
     const handleAddItem = () => {
-        if (!newItemName || !newItemAmount) return;
+        if (!newItemName || !newItemAmount) {
+            toast.error('Lütfen açıklama ve tutar girin');
+            return;
+        }
 
         const amount = parseFloat(newItemAmount);
-        if (isNaN(amount)) return;
+        if (isNaN(amount) || amount <= 0) {
+            toast.error('Lütfen geçerli bir tutar girin');
+            return;
+        }
 
         const newItem = {
             id: Math.random().toString(36).substr(2, 9),
@@ -35,13 +43,13 @@ export function BudgetWidget({ widget }: { widget: DashboardWidget }) {
             type: newItemType
         };
 
-        const newItems = [...items, newItem];
+        const newItems = [...currentItems, newItem];
 
+        // Geçici verileri güncelle
         updateDashboardWidget(widget.id, {
             config: {
                 ...widget.config,
                 budgetItems: newItems,
-                // Update summary fields for backward compatibility if needed, but we rely on array now
             }
         });
 
@@ -51,10 +59,22 @@ export function BudgetWidget({ widget }: { widget: DashboardWidget }) {
     };
 
     const handleRemoveItem = (id: string) => {
-        const newItems = items.filter(i => i.id !== id);
+        const newItems = currentItems.filter(i => i.id !== id);
+
+        // Geçici verileri güncelle
         updateDashboardWidget(widget.id, {
             config: { ...widget.config, budgetItems: newItems }
         });
+    };
+
+    const handleSave = () => {
+        saveTempBudgetItems(widget.id, currentItems);
+        toast.success('Değişiklikler kaydedildi');
+    };
+
+    const handleCancel = () => {
+        cancelTempBudgetItems(widget.id);
+        toast.info('Değişiklikler iptal edildi');
     };
 
     return (
@@ -77,21 +97,36 @@ export function BudgetWidget({ widget }: { widget: DashboardWidget }) {
                 </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="space-y-1.5 px-1">
-                <div className="flex justify-between text-[10px] font-bold">
-                    <span className="text-slate-500 uppercase">Harcama Oranı</span>
-                    <span className={cn(expenseRate > 80 ? "text-rose-600" : "text-emerald-600")}>%{expenseRate.toFixed(1)}</span>
-                </div>
-                <Progress value={expenseRate} className={cn("h-1.5", expenseRate > 100 ? "bg-rose-100" : "bg-slate-100")} indicatorClassName={cn(expenseRate > 90 ? "bg-rose-500" : "bg-emerald-500")} />
+            {/* Chart Area */}
+            <div className="h-[160px] w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                        { name: 'Gelir', value: income, fill: '#10b981' },
+                        { name: 'Gider', value: expense, fill: '#f43f5e' }
+                    ]}>
+                        <XAxis dataKey="name" fontSize={10} tickLine={false} axisLine={false} />
+                        <YAxis hide />
+                        <RechartsTooltip
+                            cursor={{ fill: 'transparent' }}
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value: number) => `₺${value.toLocaleString('tr-TR')}`}
+                        />
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                            <Cell key="income" fill="#10b981" />
+                            <Cell key="expense" fill="#f43f5e" />
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
             </div>
+
+
 
             {/* Items List */}
             <div className="space-y-2 max-h-[120px] overflow-y-auto pr-1">
-                {items.length === 0 && (
+                {currentItems.length === 0 && (
                     <div className="text-center py-4 text-xs text-slate-400 italic">Henüz kalem eklenmedi</div>
                 )}
-                {items.map(item => (
+                {currentItems.map(item => (
                     <div key={item.id} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-100 group transition-all">
                         <div className="flex items-center gap-2">
                             <div className={cn(
@@ -117,6 +152,7 @@ export function BudgetWidget({ widget }: { widget: DashboardWidget }) {
                     </div>
                 ))}
             </div>
+
 
             {/* Add Item Form */}
             <div className="flex items-center gap-2 pt-2 border-t border-slate-50">

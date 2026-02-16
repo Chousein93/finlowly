@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Calculator } from 'lucide-react';
+import { AreaChart, Area, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAppStore, DashboardWidget } from '@/store/use-app-store';
@@ -109,6 +110,39 @@ export function RetirementWidget({ widget }: { widget: DashboardWidget }) {
                     />
                 </div>
             </div>
+
+            {/* Projection Chart */}
+            {inputs.targetAge > inputs.currentAge && (
+                <div className="h-[120px] w-full mt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={(() => {
+                            const data: { age: number; balance: number }[] = [];
+                            let balance = inputs.currentSavings;
+                            const r = inputs.returnRate / 100;
+                            const annualContrib = inputs.monthlyContribution * 12;
+
+                            for (let age = inputs.currentAge; age <= inputs.targetAge; age++) {
+                                data.push({ age, balance });
+                                balance = balance * (1 + r) + annualContrib;
+                            }
+                            return data;
+                        })()}>
+                            <defs>
+                                <linearGradient id="colorGrowth" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <RechartsTooltip
+                                labelFormatter={(label) => `${label} Yaşında`}
+                                formatter={(value: number) => `₺${Math.round(value).toLocaleString('tr-TR')}`}
+                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            />
+                            <Area type="monotone" dataKey="balance" stroke="#10b981" fillOpacity={1} fill="url(#colorGrowth)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
 
             <Button onClick={saveConfig} className="w-full h-8 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white">
                 <Calculator className="h-3 w-3 mr-2" />

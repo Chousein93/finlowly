@@ -9,6 +9,7 @@ import { TrashView } from '@/components/views/trash-view';
 import { GoalsView } from '@/components/views/goals-view';
 import { SettingsView } from '@/components/views/settings-view';
 import { PlaceholderView } from '@/components/views/placeholder-view';
+import { TemplateDetailView } from '@/components/views/template-detail-view';
 import { useAppStore } from '@/store/use-app-store';
 
 export default function Home() {
@@ -30,6 +31,8 @@ export default function Home() {
         return <GoalsView />;
       case 'settings':
         return <SettingsView />;
+      case 'template-detail':
+        return <TemplateDetailView />;
       default:
         return <OverviewView />;
     }

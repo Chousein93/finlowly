@@ -1,6 +1,26 @@
 import { create } from 'zustand';
 
-export type View = 'overview' | 'templates' | 'library' | 'favorites' | 'goals' | 'settings' | 'trash';
+// Güvenli ID üretici fonksiyonu
+function generateId(prefix: string = ''): string {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substr(2, 5);
+  const unique = crypto.randomUUID?.() || `${timestamp}-${random}`;
+  return prefix ? `${prefix}-${unique}` : unique;
+}
+
+// Hata yönetimi ve debug fonksiyonları
+function logError(error: Error, context: string) {
+  console.error(`[Finlowly Error - ${context}]:`, error);
+  // Burada hata raporlama servisine gönderilebilir
+}
+
+function logDebug(message: string, data?: any) {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[Finlowly Debug]: ${message}`, data);
+  }
+}
+
+export type View = 'overview' | 'templates' | 'library' | 'favorites' | 'goals' | 'settings' | 'trash' | 'template-detail';
 
 export type TemplateType =
   | 'budget'
@@ -39,6 +59,24 @@ export interface Template {
     debts?: { id: string; name: string; amount: number; interestRate: number; minPayment: number }[];
     transactions?: { id: string; date: string; amount: number; description: string }[];
     steps?: { id: string; title: string; completed: boolean; description?: string }[];
+    customCategories?: { value: string; label: string; color: string; fill?: string }[];
+    // New Fields for Enhanced Persistence
+    categoryId?: string;
+    color?: string;
+    notes?: string;
+    date?: string; // Main transaction date
+    recurring?: {
+      enabled: boolean;
+      frequency: string;
+      interval: number;
+      period: string;
+      termination: { type: string; date?: string };
+    };
+    installment?: {
+      enabled: boolean;
+      count: number;
+      period: string;
+    };
   };
   customFields?: { id: string; label: string; value: string }[];
   originalId?: string; // Reference to source template
@@ -52,6 +90,15 @@ export interface DashboardWidget {
   position: number;
   config?: Template['config'];
   customFields?: Template['customFields'];
+  isHidden?: boolean; // If true, only visible in template detail view, not on dashboard
+}
+
+// Geçici veri tipleri
+export interface BudgetItem {
+  id: string;
+  name: string;
+  amount: number;
+  type: 'income' | 'expense';
 }
 
 // Helper function for templates list - FULL LIST for selection
@@ -92,6 +139,13 @@ export interface DeletedItem {
   expiresAt: Date;
 }
 
+export interface CustomCategory {
+  id: string;
+  label: string;
+  type: 'income' | 'expense' | 'both';
+  color?: string;
+}
+
 interface AppState {
   currentView: View;
   sidebarCollapsed: boolean;
@@ -113,7 +167,10 @@ interface AppState {
   activeDragType: 'template' | 'library-item' | 'widget' | 'folder' | 'sidebar-item' | 'goal' | null;
   rightPanelOpen: boolean;
   customFieldPool: { id: string; label: string }[];
+  customCategories: CustomCategory[];
   sidebarOrder: View[];
+  activeDetailTemplate: Template | null;
+  activeDetailWidget: DashboardWidget | null;
   addTemplate: (template: Template) => void;
   templatesOrder: string[]; // Store order of templates
   goalsOrder: string[]; // Store order of goals
@@ -152,6 +209,8 @@ interface AppState {
   deleteFolder: (id: string) => void;
   moveIntoFolder: (itemId: string, folderId: string | null) => void;
   addCustomFieldToPool: (label: string) => void;
+  addCustomCategory: (category: Omit<CustomCategory, 'id'>) => void;
+  removeCustomCategory: (id: string) => void;
   updateDashboardWidget: (id: string, updates: Partial<DashboardWidget>) => void;
   updateTemplate: (id: string, updates: Partial<Template>) => void;
   reorderSidebar: (order: View[]) => void;
@@ -160,6 +219,12 @@ interface AppState {
   openNewTransaction: () => void;
   restoreAllFromTrash: () => void;
   moveItemsToTemplates: (itemIds: string[]) => void;
+  openTemplateDetail: (template: Template) => void;
+
+  // Geçici veriler
+  tempBudgetItems: { [widgetId: string]: BudgetItem[] };
+  saveTempBudgetItems: (widgetId: string, items: BudgetItem[]) => void;
+  cancelTempBudgetItems: (widgetId: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -189,13 +254,23 @@ export const useAppStore = create<AppState>((set) => ({
     { id: '3', label: 'Kategori' },
     { id: '4', label: 'Önem Derecesi' },
   ],
+  customCategories: [],
   sidebarOrder: ['overview', 'templates', 'library', 'goals', 'favorites', 'trash', 'settings'],
+  activeDetailTemplate: null,
+  activeDetailWidget: null,
   templatesOrder: [],
-  addTemplate: (template) =>
-    set((state) => ({
-      templates: [template, ...state.templates],
-      templatesOrder: [template.id, ...state.templatesOrder],
-    })),
+  tempBudgetItems: {},
+  addTemplate: (template) => {
+    try {
+      logDebug('Adding template', template);
+      set((state) => ({
+        templates: [template, ...state.templates],
+        templatesOrder: [template.id, ...state.templatesOrder],
+      }));
+    } catch (error) {
+      logError(error as Error, 'addTemplate');
+    }
+  },
 
   updateTemplate: (id, updates) =>
     set((state) => ({
@@ -220,10 +295,42 @@ export const useAppStore = create<AppState>((set) => ({
     activeModalType: 'template'
   }),
 
+  openTemplateDetail: (template) =>
+    set((state) => {
+      // Find or create the dashboard widget for this template
+      let widget = state.dashboardWidgets.find(w => w.templateId === template.id);
+
+      if (!widget) {
+        // Auto-create a dashboard widget for this template
+        widget = {
+          id: `${template.id}-${Date.now()}`,
+          templateId: template.id,
+          title: template.title,
+          type: template.type,
+          position: state.dashboardWidgets.length,
+          config: template.config,
+          customFields: template.customFields,
+          isHidden: true, // Don't show on main dashboard by default
+        };
+        return {
+          currentView: 'template-detail' as View,
+          activeDetailTemplate: template,
+          activeDetailWidget: widget,
+          dashboardWidgets: [...state.dashboardWidgets, widget],
+        };
+      }
+
+      return {
+        currentView: 'template-detail' as View,
+        activeDetailTemplate: template,
+        activeDetailWidget: widget,
+      };
+    }),
+
   openNewTransaction: () => set({
     transactionModalOpen: true,
     activeModalTemplate: null,
-    activeModalStep: 1,
+    activeModalStep: 3,
     activeModalType: 'transaction'
   }),
 
@@ -440,21 +547,118 @@ export const useAppStore = create<AppState>((set) => ({
     }),
 
   permanentDelete: (id) =>
-    set((state) => ({
-      deletedItems: state.deletedItems.filter(i => i.id !== id),
-      selectedTrashItems: new Set(Array.from(state.selectedTrashItems).filter(sid => sid !== id))
-    })),
+    set((state) => {
+      const item = state.deletedItems.find(i => i.id === id);
+      const newState: Partial<AppState> = {
+        deletedItems: state.deletedItems.filter(i => i.id !== id),
+        selectedTrashItems: new Set(Array.from(state.selectedTrashItems).filter(sid => sid !== id))
+      };
+
+      // Also remove related templates and widgets to prevent ghost cards
+      if (item?.type === 'template') {
+        const templateId = item.data?.id || id;
+        newState.templates = state.templates.filter(t => t.id !== templateId);
+        newState.templatesOrder = state.templatesOrder.filter(tid => tid !== templateId);
+        newState.dashboardWidgets = state.dashboardWidgets.filter(w => w.templateId !== templateId);
+        newState.libraryTemplates = state.libraryTemplates.filter(t => t.id !== templateId && t.originalId !== templateId);
+        newState.favorites = state.favorites.filter(fid => fid !== templateId);
+      } else if (item?.type === 'widget') {
+        const widgetId = item.data?.id || id;
+        newState.dashboardWidgets = state.dashboardWidgets.filter(w => w.id !== widgetId);
+      } else if (item?.type === 'goal') {
+        const goalId = item.data?.id || id;
+        newState.goals = state.goals.filter(g => g.id !== goalId);
+        newState.goalsOrder = state.goalsOrder.filter(gid => gid !== goalId);
+      }
+
+      return newState;
+    }),
 
   permanentDeleteSelected: () =>
     set((state) => {
       const selectedIds = Array.from(state.selectedTrashItems);
+      const itemsToDelete = state.deletedItems.filter(i => selectedIds.includes(i.id));
+
+      let newTemplates = [...state.templates];
+      let newTemplatesOrder = [...state.templatesOrder];
+      let newWidgets = [...state.dashboardWidgets];
+      let newLibrary = [...state.libraryTemplates];
+      let newFavorites = [...state.favorites];
+      let newGoals = [...state.goals];
+      let newGoalsOrder = [...state.goalsOrder];
+
+      itemsToDelete.forEach(item => {
+        if (item.type === 'template') {
+          const templateId = item.data?.id || item.id;
+          newTemplates = newTemplates.filter(t => t.id !== templateId);
+          newTemplatesOrder = newTemplatesOrder.filter(tid => tid !== templateId);
+          newWidgets = newWidgets.filter(w => w.templateId !== templateId);
+          newLibrary = newLibrary.filter(t => t.id !== templateId && t.originalId !== templateId);
+          newFavorites = newFavorites.filter(fid => fid !== templateId);
+        } else if (item.type === 'widget') {
+          const widgetId = item.data?.id || item.id;
+          newWidgets = newWidgets.filter(w => w.id !== widgetId);
+        } else if (item.type === 'goal') {
+          const goalId = item.data?.id || item.id;
+          newGoals = newGoals.filter(g => g.id !== goalId);
+          newGoalsOrder = newGoalsOrder.filter(gid => gid !== goalId);
+        }
+      });
+
       return {
         deletedItems: state.deletedItems.filter(i => !selectedIds.includes(i.id)),
-        selectedTrashItems: new Set()
+        selectedTrashItems: new Set(),
+        templates: newTemplates,
+        templatesOrder: newTemplatesOrder,
+        dashboardWidgets: newWidgets,
+        libraryTemplates: newLibrary,
+        favorites: newFavorites,
+        goals: newGoals,
+        goalsOrder: newGoalsOrder,
       };
     }),
 
-  emptyTrash: () => set({ deletedItems: [] }),
+  emptyTrash: () =>
+    set((state) => {
+      // Collect all template/widget/goal IDs being permanently deleted
+      let newTemplates = [...state.templates];
+      let newTemplatesOrder = [...state.templatesOrder];
+      let newWidgets = [...state.dashboardWidgets];
+      let newLibrary = [...state.libraryTemplates];
+      let newFavorites = [...state.favorites];
+      let newGoals = [...state.goals];
+      let newGoalsOrder = [...state.goalsOrder];
+
+      state.deletedItems.forEach(item => {
+        if (item.type === 'template') {
+          const templateId = item.data?.id || item.id;
+          newTemplates = newTemplates.filter(t => t.id !== templateId);
+          newTemplatesOrder = newTemplatesOrder.filter(tid => tid !== templateId);
+          newWidgets = newWidgets.filter(w => w.templateId !== templateId);
+          newLibrary = newLibrary.filter(t => t.id !== templateId && t.originalId !== templateId);
+          newFavorites = newFavorites.filter(fid => fid !== templateId);
+        } else if (item.type === 'widget') {
+          const widgetId = item.data?.id || item.id;
+          newWidgets = newWidgets.filter(w => w.id !== widgetId);
+        } else if (item.type === 'goal') {
+          const goalId = item.data?.id || item.id;
+          newGoals = newGoals.filter(g => g.id !== goalId);
+          newGoalsOrder = newGoalsOrder.filter(gid => gid !== goalId);
+        }
+      });
+
+      return {
+        deletedItems: [],
+        selectedTrashItems: new Set(),
+        templates: newTemplates,
+        templatesOrder: newTemplatesOrder,
+        dashboardWidgets: newWidgets,
+        libraryTemplates: newLibrary,
+        favorites: newFavorites,
+        goals: newGoals,
+        goalsOrder: newGoalsOrder,
+      };
+    }),
 
   reorderDeletedItems: (items) => set({ deletedItems: items }),
 
@@ -484,7 +688,7 @@ export const useAppStore = create<AppState>((set) => ({
   })),
 
   createFolder: (name) => set((state) => ({
-    libraryFolders: [...state.libraryFolders, { id: `folder-${Date.now()}`, name, itemIds: [] }]
+    libraryFolders: [...state.libraryFolders, { id: generateId('folder'), name, itemIds: [] }]
   })),
 
   renameFolder: (id, name) => set((state) => ({
@@ -514,9 +718,15 @@ export const useAppStore = create<AppState>((set) => ({
   addCustomFieldToPool: (label) => set((state) => {
     if (state.customFieldPool.some(f => f.label === label)) return state;
     return {
-      customFieldPool: [...state.customFieldPool, { id: `pool-${Date.now()}`, label }]
+      customFieldPool: [...state.customFieldPool, { id: generateId('pool'), label }]
     };
   }),
+  addCustomCategory: (category) => set((state) => ({
+    customCategories: [...state.customCategories, { ...category, id: generateId('cat') }]
+  })),
+  removeCustomCategory: (id) => set((state) => ({
+    customCategories: state.customCategories.filter(c => c.id !== id)
+  })),
   updateDashboardWidget: (id, updates) => set((state) => ({
     dashboardWidgets: state.dashboardWidgets.map(w => w.id === id ? { ...w, ...updates, config: { ...w.config, ...updates.config } } : w)
   })),
@@ -552,6 +762,38 @@ export const useAppStore = create<AppState>((set) => ({
       selectedLibraryTemplates: new Set()
     };
   }),
+
+  saveTempBudgetItems: (widgetId, items) => set((state) => {
+    // Kalıcı verilere kaydet
+    const widget = state.dashboardWidgets.find(w => w.id === widgetId);
+    if (widget) {
+      return {
+        dashboardWidgets: state.dashboardWidgets.map(w =>
+          w.id === widgetId
+            ? {
+              ...w,
+              config: {
+                ...w.config,
+                budgetItems: items
+              }
+            }
+            : w
+        ),
+        tempBudgetItems: {
+          ...state.tempBudgetItems,
+          [widgetId]: [] // Geçici veriyi temizle
+        }
+      };
+    }
+    return state;
+  }),
+
+  cancelTempBudgetItems: (widgetId) => set((state) => ({
+    tempBudgetItems: {
+      ...state.tempBudgetItems,
+      [widgetId]: [] // Geçici veriyi temizle
+    }
+  })),
 }));
 
 // Helper function to get visible (non-trashed) library templates - No longer needed as libraryTemplates is filtered on delete

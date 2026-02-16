@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -12,7 +13,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAppStore } from '@/store/use-app-store';
-import { X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface StatItemProps {
   title: string;
@@ -20,9 +21,10 @@ interface StatItemProps {
   icon: any;
   iconColor: string;
   bgColor: string;
+  trend?: 'up' | 'down' | 'neutral';
 }
 
-function StatItem({ title, value, icon: Icon, iconColor, bgColor }: StatItemProps) {
+function StatItem({ title, value, icon: Icon, iconColor, bgColor, trend }: StatItemProps) {
   return (
     <Card className="border-slate-100 shadow-none bg-white hover:bg-slate-50/50 transition-colors duration-200">
       <CardContent className="p-4">
@@ -32,7 +34,10 @@ function StatItem({ title, value, icon: Icon, iconColor, bgColor }: StatItemProp
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-medium text-slate-500 uppercase tracking-wider">{title}</p>
-            <p className="text-lg font-bold text-slate-900 truncate mt-0.5">{value}</p>
+            <p className={cn(
+              "text-lg font-bold truncate mt-0.5",
+              trend === 'up' ? "text-emerald-600" : trend === 'down' ? "text-rose-600" : "text-slate-900"
+            )}>{value}</p>
           </div>
         </div>
       </CardContent>
@@ -41,7 +46,33 @@ function StatItem({ title, value, icon: Icon, iconColor, bgColor }: StatItemProp
 }
 
 export function RightPanel() {
-  const { openNewTransaction, toggleRightPanel } = useAppStore();
+  const { openNewTransaction, toggleRightPanel, dashboardWidgets } = useAppStore();
+
+  // ── Live Data from Dashboard Widgets ────────────────────────────────
+  const { totalIncome, totalExpense, netBalance } = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+
+    for (const w of dashboardWidgets) {
+      const items = w.config?.budgetItems || [];
+
+      if (w.type === 'budget' || w.type === 'expense_tracker') {
+        for (const item of items) {
+          if (item.type === 'income') income += item.amount;
+          else expense += item.amount;
+        }
+      }
+    }
+
+    return {
+      totalIncome: income,
+      totalExpense: expense,
+      netBalance: income - expense,
+    };
+  }, [dashboardWidgets]);
+
+  const formatCurrency = (val: number) =>
+    `₺${Math.abs(val).toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
   return (
     <aside className="w-80 bg-white border-l border-slate-200 flex flex-col hidden xl:flex animate-in slide-in-from-right duration-500 overflow-hidden">
@@ -71,33 +102,39 @@ export function RightPanel() {
 
       <div className="p-6 pt-2 space-y-8 h-full overflow-y-auto">
 
-        {/* Quick Stats Section */}
+        {/* Quick Stats Section — LIVE DATA */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-slate-900 tracking-tight">Hızlı İstatistikler</h2>
+            {(totalIncome > 0 || totalExpense > 0) && (
+              <span className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full animate-pulse">Canlı</span>
+            )}
           </div>
 
           <div className="grid gap-3">
             <StatItem
               title="Toplam Gelir"
-              value="₺0"
+              value={formatCurrency(totalIncome)}
               icon={ArrowUpCircle}
               iconColor="text-emerald-600"
               bgColor="bg-emerald-50"
+              trend={totalIncome > 0 ? 'up' : 'neutral'}
             />
             <StatItem
               title="Toplam Gider"
-              value="₺0"
+              value={formatCurrency(totalExpense)}
               icon={ArrowDownCircle}
               iconColor="text-rose-600"
               bgColor="bg-rose-50"
+              trend={totalExpense > 0 ? 'down' : 'neutral'}
             />
             <StatItem
               title="Kalan Bakiye"
-              value="₺0"
+              value={`${netBalance < 0 ? '-' : ''}${formatCurrency(netBalance)}`}
               icon={Wallet}
-              iconColor="text-slate-600"
-              bgColor="bg-slate-100"
+              iconColor={netBalance >= 0 ? "text-emerald-600" : "text-rose-600"}
+              bgColor={netBalance >= 0 ? "bg-emerald-50" : "bg-rose-50"}
+              trend={netBalance >= 0 ? 'up' : 'down'}
             />
           </div>
         </section>

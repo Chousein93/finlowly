@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calculator, TrendingDown } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAppStore, DashboardWidget } from '@/store/use-app-store';
@@ -66,17 +67,34 @@ export function TaxWidget({ widget }: { widget: DashboardWidget }) {
                 </div>
             </div>
 
-            {/* Rate Bar */}
-            <div className="space-y-1.5">
-                <div className="flex justify-between text-[10px] font-bold">
-                    <span className="text-slate-500 uppercase">Efektif Vergi Oranı</span>
-                    <span className="text-rose-600">%{effectiveRate.toFixed(1)}</span>
-                </div>
-                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
-                    {/* Visual representation of brackets filling up */}
-                    <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${effectiveRate}%` }} />
-                </div>
+            {/* Distribution Chart */}
+            <div className="h-[140px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={[
+                                { name: 'Net Gelir', value: netIncome, fill: '#10b981' },
+                                { name: 'Vergi', value: tax, fill: '#f43f5e' }
+                            ]}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={40}
+                            outerRadius={60}
+                            paddingAngle={5}
+                            dataKey="value"
+                        >
+                            <Cell key="net" fill="#10b981" />
+                            <Cell key="tax" fill="#f43f5e" />
+                        </Pie>
+                        <RechartsTooltip
+                            formatter={(value: number) => `₺${value.toLocaleString('tr-TR')}`}
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        />
+                    </PieChart>
+                </ResponsiveContainer>
             </div>
+
+
 
             {/* Input */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2">

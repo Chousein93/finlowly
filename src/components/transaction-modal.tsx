@@ -17,7 +17,8 @@ import {
     CalendarDays,
     Hash,
     ArrowRight,
-    Plus
+    Plus,
+    Trash2
 } from 'lucide-react';
 import {
     Sheet,
@@ -71,14 +72,28 @@ const categories = [
     { id: 'other', label: 'Diğer', type: 'both' },
 ];
 
-const colors = [
-    { name: 'emerald', class: 'bg-emerald-500', border: 'border-emerald-600' },
-    { name: 'blue', class: 'bg-blue-500', border: 'border-blue-600' },
-    { name: 'rose', class: 'bg-rose-500', border: 'border-rose-600' },
-    { name: 'amber', class: 'bg-amber-500', border: 'border-amber-600' },
-    { name: 'violet', class: 'bg-violet-500', border: 'border-violet-600' },
-    { name: 'orange', class: 'bg-orange-500', border: 'border-orange-600' },
-];
+
+
+const getColorHex = (colorName: string) => {
+    const colors: { [key: string]: string } = {
+        'emerald': '#10b981',
+        'blue': '#3b82f6',
+        'rose': '#f43f5e',
+        'amber': '#f59e0b',
+        'violet': '#8b5cf6',
+        'orange': '#f97316'
+    };
+    return colors[colorName] || colorName || '#10b981';
+};
+
+const getContrastColor = (hexcolor: string) => {
+    if (!hexcolor || !hexcolor.startsWith('#')) return 'white';
+    const r = parseInt(hexcolor.slice(1, 3), 16);
+    const g = parseInt(hexcolor.slice(3, 5), 16);
+    const b = parseInt(hexcolor.slice(5, 7), 16);
+    const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+    return (yiq >= 145) ? '#0f172a' : 'white'; // slate-900 for light bgs
+};
 
 const daysOfWeek = [
     { id: 'mon', label: 'Pzt' },
@@ -94,31 +109,33 @@ function LivePreview({ type, config }: { type: string, config: any }) {
     // 1. Budget/Expense Tracker Logic
     if (type === 'budget' || type === 'expense_tracker') {
         const items = config.budgetItems || [];
-        const income = items.filter((i: any) => i.type === 'income').reduce((sum: number, i: any) => sum + i.amount, 0);
-        const expense = items.filter((i: any) => i.type === 'expense').reduce((sum: number, i: any) => sum + i.amount, 0);
+        let income = items.filter((i: any) => i.type === 'income').reduce((sum: number, i: any) => sum + i.amount, 0);
+        let expense = items.filter((i: any) => i.type === 'expense').reduce((sum: number, i: any) => sum + i.amount, 0);
+
+        if (config.amount && config.transactionType) {
+            if (config.transactionType === 'income') income += config.amount;
+            else expense += config.amount;
+        }
+
         const balance = income - expense;
-        const rate = income > 0 ? (expense / income) * 100 : 0;
+        const textColor = getContrastColor(config.color || '#10b981');
+        const secondaryTextColor = textColor === 'white' ? 'rgba(255,255,255,0.6)' : 'rgba(15,23,42,0.6)';
 
         return (
             <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-white/5 p-2 rounded-xl border border-white/10 text-center">
-                        <div className="text-[8px] font-bold text-slate-500">GELİR</div>
-                        <div className="text-xs font-bold text-emerald-400">₺{income.toLocaleString()}</div>
+                    <div className="p-2 rounded-xl border text-center" style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}>
+                        <div className="text-[8px] font-bold uppercase" style={{ color: secondaryTextColor }}>GELİR</div>
+                        <div className="text-xs font-bold" style={{ color: textColor }}>₺{income.toLocaleString()}</div>
                     </div>
-                    <div className="bg-white/5 p-2 rounded-xl border border-white/10 text-center">
-                        <div className="text-[8px] font-bold text-slate-500">GİDER</div>
-                        <div className="text-xs font-bold text-rose-400">₺{expense.toLocaleString()}</div>
+                    <div className="p-2 rounded-xl border text-center" style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}>
+                        <div className="text-[8px] font-bold uppercase" style={{ color: secondaryTextColor }}>GİDER</div>
+                        <div className="text-xs font-bold" style={{ color: textColor }}>₺{expense.toLocaleString()}</div>
                     </div>
-                    <div className="bg-white/5 p-2 rounded-xl border border-white/10 text-center">
-                        <div className="text-[8px] font-bold text-slate-500">BAKİYE</div>
-                        <div className="text-xs font-bold">₺{balance.toLocaleString()}</div>
+                    <div className="p-2 rounded-xl border text-center" style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)' }}>
+                        <div className="text-[8px] font-bold uppercase" style={{ color: secondaryTextColor }}>BAKİYE</div>
+                        <div className="text-xs font-bold" style={{ color: textColor }}>₺{balance.toLocaleString()}</div>
                     </div>
-                </div>
-                <div className="space-y-1.5 h-16 flex items-end gap-1 px-1">
-                    {[30, 60, 45, 80, 50, 90, 70, 100].map((h, i) => (
-                        <div key={i} className="flex-1 bg-emerald-500/20 rounded-t-sm" style={{ height: `${h}%` }} />
-                    ))}
                 </div>
             </div>
         );
@@ -127,20 +144,20 @@ function LivePreview({ type, config }: { type: string, config: any }) {
     // 2. Goal Logic (Emergency/Holiday)
     if (type === 'emergency' || type === 'holiday') {
         const perc = config.targetAmount > 0 ? Math.min((config.currentAmount / config.targetAmount) * 100, 100) : 0;
+        const textColor = getContrastColor(config.color || '#10b981');
+        const secondaryTextColor = textColor === 'white' ? 'rgba(255,255,255,0.6)' : 'rgba(15,23,42,0.6)';
+
         return (
             <div className="space-y-4">
                 <div className="flex justify-between items-end">
                     <div>
-                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">İLERLEME</div>
-                        <div className="text-lg font-bold">%{perc.toFixed(1)}</div>
+                        <div className="text-[8px] font-bold uppercase tracking-widest mb-1" style={{ color: secondaryTextColor }}>İLERLEME</div>
+                        <div className="text-lg font-bold" style={{ color: textColor }}>%{perc.toFixed(1)}</div>
                     </div>
                     <div className="text-right">
-                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">KALAN</div>
-                        <div className="text-xs font-bold text-emerald-400">₺{(config.targetAmount - config.currentAmount).toLocaleString()}</div>
+                        <div className="text-[8px] font-bold uppercase tracking-widest mb-1" style={{ color: secondaryTextColor }}>KALAN</div>
+                        <div className="text-xs font-bold" style={{ color: textColor }}>₺{(config.targetAmount - config.currentAmount).toLocaleString()}</div>
                     </div>
-                </div>
-                <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${perc}%` }} />
                 </div>
             </div>
         );
@@ -149,16 +166,14 @@ function LivePreview({ type, config }: { type: string, config: any }) {
     // 3. Portfolio
     if (type === 'portfolio') {
         const total = config.assets?.reduce((sum: number, a: any) => sum + a.value, 0) || 0;
+        const textColor = getContrastColor(config.color || '#10b981');
+        const secondaryTextColor = textColor === 'white' ? 'rgba(255,255,255,0.6)' : 'rgba(15,23,42,0.6)';
+
         return (
             <div className="space-y-4">
                 <div className="text-center">
-                    <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">TOPLAM VARLIK</div>
-                    <div className="text-2xl font-bold">₺{total.toLocaleString()}</div>
-                </div>
-                <div className="flex h-3 w-full rounded-full overflow-hidden bg-white/5 border border-white/10">
-                    {config.assets?.map((a: any, i: number) => (
-                        <div key={i} className="h-full bg-emerald-500" style={{ width: `${(a.value / (total || 1)) * 100}%`, opacity: 1 - i * 0.2 }} />
-                    ))}
+                    <div className="text-[8px] font-bold uppercase tracking-widest" style={{ color: secondaryTextColor }}>TOPLAM VARLIK</div>
+                    <div className="text-2xl font-bold" style={{ color: textColor }}>₺{total.toLocaleString()}</div>
                 </div>
             </div>
         );
@@ -180,7 +195,10 @@ export function TransactionModal() {
         customFieldPool,
         activeModalTemplate,
         activeModalStep,
-        activeModalType
+        activeModalType,
+        customCategories,
+        addCustomCategory,
+        removeCustomCategory
     } = useAppStore();
     const isMobile = useIsMobile();
     const [type, setType] = useState<'income' | 'expense'>('expense');
@@ -188,7 +206,7 @@ export function TransactionModal() {
     const [title, setTitle] = useState('');
     const [amount, setAmount] = useState('');
     const [errors, setErrors] = useState<{ title?: boolean, amount?: boolean }>({});
-    const [selectedColor, setSelectedColor] = useState('emerald');
+    const [selectedColor, setSelectedColor] = useState('#10b981');
 
     const [step, setStep] = useState(1); // 1: Select Type, 2: Select Template/Form, 3: Details
     const [creationType, setCreationType] = useState<'transaction' | 'template' | 'custom'>('transaction');
@@ -216,10 +234,33 @@ export function TransactionModal() {
                 setAssets(config.assets || []);
                 setDebts(config.debts || []);
                 setSteps(config.steps || []);
+                setCategoryId(config.categoryId || '');
+                setNotes(config.notes || '');
+                setSelectedColor(getColorHex(config.color || 'emerald'));
+
+                // Load recurring settings
+                if (config.recurring) {
+                    setIsRecurring(config.recurring.enabled);
+                    setFrequency(config.recurring.frequency);
+                    setCustomInterval(config.recurring.interval?.toString() || '1');
+                    setCustomPeriod(config.recurring.period || 'ay');
+                    setTerminationType(config.recurring.termination?.type || 'never');
+                    if (config.recurring.termination?.date) {
+                        setTerminationDate(new Date(config.recurring.termination.date));
+                    }
+                }
+
+                // Load installment settings
+                if (config.installment) {
+                    setIsInstallment(config.installment.enabled);
+                    setInstallmentCount(config.installment.count?.toString() || '12');
+                    setInstallmentPeriod(config.installment.period || 'monthly');
+                }
+
                 setCustomFields(activeModalTemplate.customFields || []);
             } else {
                 setSelectedTemplateRef(null);
-                setTitle('');
+                setTitle('Aylık Bütçe');
                 resetForm();
             }
         }
@@ -253,14 +294,38 @@ export function TransactionModal() {
     const [debts, setDebts] = useState<any[]>([]);
     const [steps, setSteps] = useState<any[]>([]);
 
+    // New Budget Item State (lifted from TemplateFields)
+    const [newItemName, setNewItemName] = useState('');
+    const [newItemAmount, setNewItemAmount] = useState('');
+    const [newItemType, setNewItemType] = useState<'income' | 'expense'>('expense');
+
+    // Custom Category Creation State
+    const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState('');
+    const [newCategoryType, setNewCategoryType] = useState<'income' | 'expense' | 'both'>('expense');
+    const [newCategoryColor, setNewCategoryColor] = useState('#000000');
+
+    // Missing State Bindings
+    const [categoryId, setCategoryId] = useState('');
+    const [notes, setNotes] = useState('');
+
     const handleSave = () => {
         const newErrors: { title?: boolean, amount?: boolean } = {};
         if (!title.trim()) newErrors.title = true;
-        if (creationType === 'transaction' && (!amount || parseFloat(amount) <= 0)) newErrors.amount = true;
+
+        // If amount is empty but we have items, calculate total
+        let finalAmount = amount;
+        if (creationType === 'transaction' && (!amount || parseFloat(amount) <= 0) && budgetItems.length > 0) {
+            const total = budgetItems.reduce((sum, item) => sum + (item.type === type ? item.amount : -item.amount), 0);
+            finalAmount = Math.max(0, total).toString();
+            setAmount(finalAmount);
+        }
+
+        if (creationType === 'transaction' && (!finalAmount || parseFloat(finalAmount) <= 0)) newErrors.amount = true;
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
-            toast.error('Lütfen zorunlu alanları doldurun');
+            toast.error('Lütfen zorunlu alanları doldurun (Başlık ve Tutar)');
             return;
         }
 
@@ -301,26 +366,54 @@ export function TransactionModal() {
                 assets: assets.length > 0 ? assets : undefined,
                 debts: debts.length > 0 ? debts : undefined,
                 steps: steps.length > 0 ? steps : undefined,
+                // New Fields
+                categoryId,
+                color: selectedColor,
+                notes,
+                date: date.toISOString(),
+                recurring: {
+                    enabled: isRecurring,
+                    frequency,
+                    interval: parseInt(customInterval) || 1,
+                    period: customPeriod,
+                    termination: { type: terminationType, date: terminationDate ? terminationDate.toISOString() : undefined }
+                },
+                installment: {
+                    enabled: isInstallment,
+                    count: parseInt(installmentCount) || 12,
+                    period: installmentPeriod
+                }
             },
             customFields: customFields.length > 0 ? customFields : undefined
         };
 
-        // Add new custom fields to pool
-        customFields.forEach(cf => {
-            if (cf.label.trim()) {
-                useAppStore.getState().addCustomFieldToPool(cf.label);
-            }
-        });
+
 
         if (existingTemplateId) {
             useAppStore.getState().updateTemplate(existingTemplateId, newTemplate);
+            // Also update the corresponding dashboard widget if it exists
+            const widgets = useAppStore.getState().dashboardWidgets;
+            const matchingWidget = widgets.find(w => w.templateId === existingTemplateId);
+            if (matchingWidget) {
+                useAppStore.getState().updateDashboardWidget(matchingWidget.id, {
+                    title: newTemplate.title,
+                    config: newTemplate.config,
+                    customFields: newTemplate.customFields,
+                });
+            }
             toast.success('Şablon başarıyla güncellendi');
         } else {
             addTemplate(newTemplate);
-            toast.success('Yeni şablon Şablonlar bölümüne başarıyla eklendi');
+            if (creationType === 'transaction') {
+                // Automatically add to dashboard for transactions
+                useAppStore.getState().addToDashboard(newTemplate);
+                toast.success('İşlem kaydedildi ve Dashboard\'a eklendi!');
+            } else {
+                toast.success('Şablon kütüphaneye eklendi!');
+            }
         }
 
-        // Always redirect to Templates view
+        // Navigate to templates list to see the created template
         useAppStore.getState().setCurrentView('templates');
 
         setTransactionModalOpen(false);
@@ -344,15 +437,39 @@ export function TransactionModal() {
         setBudgetItems([]);
         setAssets([]);
         setDebts([]);
+        setDebts([]);
         setSteps([]);
+        setNewItemName('');
+        setNewItemAmount('');
+        setNewItemType('expense');
+        setCategoryId('');
+        setNotes('');
+        setNewCategoryName('');
+        setNewCategoryColor('#000000');
+        setSelectedColor('#10b981');
+        setDate(new Date());
     };
 
     const addCustomField = () => {
         setCustomFields([...customFields, { id: `field-${Date.now()}`, label: 'Yeni Alan', value: '' }]);
     };
 
+    const handleAddCategory = () => {
+        if (!newCategoryName.trim()) return;
+
+        addCustomCategory({
+            label: newCategoryName,
+            type: newCategoryType,
+            color: newCategoryColor
+        });
+
+        setNewCategoryName('');
+        setIsCategoryModalOpen(false);
+        toast.success('Kategori başarıyla eklendi');
+    };
+
     const TemplateFields = () => {
-        const type = selectedTemplate?.type || creationType;
+        const templateCategory = selectedTemplate?.type || (creationType === 'transaction' ? 'budget' : creationType);
 
         if (creationType === 'custom') {
             return (
@@ -377,55 +494,114 @@ export function TransactionModal() {
             );
         }
 
-        switch (type) {
+        switch (templateCategory) {
             case 'budget':
             case 'expense_tracker':
                 return (
                     <div className="space-y-4">
-                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">BÜTÇE KALEMLERİ</Label>
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                            {budgetItems.map(item => (
-                                <div key={item.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 group">
-                                    <div className="flex items-center gap-2">
-                                        <div className={cn("w-1.5 h-1.5 rounded-full", item.type === 'income' ? "bg-emerald-500" : "bg-rose-500")} />
-                                        <span className="text-xs font-medium text-slate-700">{item.name}</span>
+                        <div className="flex items-center justify-between">
+                            <Label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">BÜTÇE KALEMLERİ (GELİR & GİDER)</Label>
+                            {budgetItems.length > 0 && (
+                                <span className="text-[10px] font-bold text-slate-400">{budgetItems.length} Kalem</span>
+                            )}
+                        </div>
+
+                        <div className="space-y-2 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
+                            {budgetItems.length === 0 ? (
+                                <div className="py-8 text-center border-2 border-dashed border-slate-100 rounded-xl">
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Henüz kalem eklenmedi</div>
+                                    <div className="text-[9px] text-slate-400 mt-1">Aşağıdan gelir veya gider ekleyerek başlayın</div>
+                                </div>
+                            ) : budgetItems.map(item => (
+                                <div key={item.id} className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-100 shadow-sm transition-all hover:border-slate-200 group">
+                                    <div className="flex items-center gap-3">
+                                        <div className={cn(
+                                            "w-8 h-8 rounded-lg flex items-center justify-center",
+                                            item.type === 'income' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                                        )}>
+                                            {item.type === 'income' ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                                        </div>
+                                        <div>
+                                            <div className="text-[11px] font-bold text-slate-700">{item.name}</div>
+                                            <div className="text-[9px] text-slate-400 uppercase font-bold tracking-tight">
+                                                {item.type === 'income' ? 'Gelir' : 'Gider'}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className={cn("text-xs font-bold", item.type === 'income' ? "text-emerald-600" : "text-rose-600")}>
+                                    <div className="flex items-center gap-3">
+                                        <span className={cn("text-xs font-black", item.type === 'income' ? "text-emerald-600" : "text-rose-600")}>
                                             {item.type === 'income' ? '+' : '-'}₺{item.amount.toLocaleString()}
                                         </span>
                                         <Button
-                                            variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500"
+                                            variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
                                             onClick={() => setBudgetItems(budgetItems.filter(i => i.id !== item.id))}
                                         >
-                                            <X className="h-3 w-3" />
+                                            <X className="h-3.5 w-3.5" />
                                         </Button>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        <div className="flex gap-2 pt-2">
-                            <Input id="new-item-name" placeholder="Açıklama" className="h-9 text-xs" />
-                            <Input id="new-item-amount" type="number" placeholder="Tutar" className="h-9 text-xs w-24" />
-                            <Button
-                                size="sm" className="h-9 bg-slate-900"
-                                onClick={() => {
-                                    const nameInput = document.getElementById('new-item-name') as HTMLInputElement;
-                                    const amountInput = document.getElementById('new-item-amount') as HTMLInputElement;
-                                    if (nameInput.value && amountInput.value) {
-                                        setBudgetItems([...budgetItems, {
-                                            id: Math.random().toString(36).substr(2, 9),
-                                            name: nameInput.value,
-                                            amount: parseFloat(amountInput.value),
-                                            type: type // use parent modal type (income/expense)
-                                        }]);
-                                        nameInput.value = '';
-                                        amountInput.value = '';
-                                    }
-                                }}
-                            >
-                                <Plus className="h-4 w-4" />
-                            </Button>
+
+                        <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <Label className="text-[9px] font-bold text-slate-400 uppercase ml-1">KALEM ADI</Label>
+                                    <Input
+                                        value={newItemName}
+                                        onChange={(e) => setNewItemName(e.target.value)}
+                                        placeholder="Örn: Market Harcaması"
+                                        className="h-10 text-xs bg-white border-slate-200 focus:ring-slate-900"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-[9px] font-bold text-slate-400 uppercase ml-1">TİP</Label>
+                                    <Select value={newItemType} onValueChange={(v: 'income' | 'expense') => setNewItemType(v)}>
+                                        <SelectTrigger className="h-10 text-xs bg-white border-slate-200 focus:ring-slate-900">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="income">Gelir</SelectItem>
+                                            <SelectItem value="expense">Gider</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="flex-1 space-y-1.5">
+                                    <Label className="text-[9px] font-bold text-slate-400 uppercase ml-1">TUTAR (₺)</Label>
+                                    <Input
+                                        value={newItemAmount}
+                                        onChange={(e) => setNewItemAmount(e.target.value)}
+                                        type="number"
+                                        placeholder="0.00"
+                                        className="h-10 text-xs bg-white border-slate-200 focus:ring-slate-900"
+                                    />
+                                </div>
+                                <div className="pt-[21px]">
+                                    <Button
+                                        className="h-10 bg-slate-900 hover:bg-slate-800 text-white px-5 rounded-xl font-bold text-xs flex items-center gap-2"
+                                        onClick={() => {
+                                            if (newItemName && newItemAmount) {
+                                                setBudgetItems([...budgetItems, {
+                                                    id: Math.random().toString(36).substr(2, 9),
+                                                    name: newItemName,
+                                                    amount: parseFloat(newItemAmount),
+                                                    type: newItemType
+                                                }]);
+                                                setNewItemName('');
+                                                setNewItemAmount('');
+                                                toast.success('Kalem başarıyla eklendi');
+                                            } else {
+                                                toast.error('Lütfen tüm alanları doldurun');
+                                            }
+                                        }}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        EKLE
+                                    </Button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 );
@@ -532,7 +708,11 @@ export function TransactionModal() {
                         <Button
                             variant="outline"
                             className="h-24 flex flex-col gap-2 rounded-2xl border-slate-200 hover:border-slate-900 group"
-                            onClick={() => { setCreationType('transaction'); setStep(3); }}
+                            onClick={() => {
+                                setCreationType('transaction');
+                                setSelectedTemplateRef(null);
+                                setStep(3);
+                            }}
                         >
                             <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-slate-900 group-hover:text-white transition-colors">
                                 <Wallet className="h-5 w-5" />
@@ -554,7 +734,11 @@ export function TransactionModal() {
                         <Button
                             variant="outline"
                             className="h-24 flex flex-col gap-2 rounded-2xl border-slate-200 hover:border-slate-900 group"
-                            onClick={() => { setCreationType('custom'); setStep(3); }}
+                            onClick={() => {
+                                setCreationType('custom');
+                                setSelectedTemplateRef(null);
+                                setStep(3);
+                            }}
                         >
                             <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center group-hover:bg-slate-900 group-hover:text-white transition-colors">
                                 <Plus className="h-5 w-5" />
@@ -607,32 +791,56 @@ export function TransactionModal() {
 
                         {TemplateFields()}
 
-                        {creationType === 'transaction' && (
-                            <Tabs value={type} onValueChange={(v) => setType(v as 'income' | 'expense')} className="w-full">
-                                <TabsList className="grid w-full grid-cols-2 bg-slate-100 p-1 h-11 rounded-xl">
-                                    <TabsTrigger value="income" className="rounded-lg font-semibold">
-                                        <TrendingUp className="h-4 w-4 mr-2" /> Gelir
-                                    </TabsTrigger>
-                                    <TabsTrigger value="expense" className="rounded-lg font-semibold">
-                                        <TrendingDown className="h-4 w-4 mr-2" /> Gider
-                                    </TabsTrigger>
-                                </TabsList>
-                            </Tabs>
+                        {creationType === 'transaction' ? (
+                            <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 mb-6">
+                                <div className="text-center">
+                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1">TOPLAM GELİR</div>
+                                    <div className="text-xs font-bold text-emerald-600">
+                                        ₺{budgetItems.filter(i => i.type === 'income').reduce((sum, i) => sum + i.amount, 0).toLocaleString()}
+                                    </div>
+                                </div>
+                                <div className="text-center border-x border-slate-200">
+                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1">TOPLAM GİDER</div>
+                                    <div className="text-xs font-bold text-rose-600">
+                                        ₺{budgetItems.filter(i => i.type === 'expense').reduce((sum, i) => sum + i.amount, 0).toLocaleString()}
+                                    </div>
+                                </div>
+                                <div className="text-center">
+                                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1">NET BAKİYE</div>
+                                    <div className="text-xs font-black text-slate-900">
+                                        ₺{(budgetItems.filter(i => i.type === 'income').reduce((sum, i) => sum + i.amount, 0) -
+                                            budgetItems.filter(i => i.type === 'expense').reduce((sum, i) => sum + i.amount, 0)).toLocaleString()}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-4 mb-6">
+                                <Tabs value={type} onValueChange={(v) => setType(v as 'income' | 'expense')} className="w-full">
+                                    <TabsList className="grid w-full grid-cols-2 bg-slate-100 p-1 h-11 rounded-xl">
+                                        <TabsTrigger value="income" className="rounded-lg font-semibold">
+                                            <TrendingUp className="h-4 w-4 mr-2" /> Gelir
+                                        </TabsTrigger>
+                                        <TabsTrigger value="expense" className="rounded-lg font-semibold">
+                                            <TrendingDown className="h-4 w-4 mr-2" /> Gider
+                                        </TabsTrigger>
+                                    </TabsList>
+                                </Tabs>
+                            </div>
                         )}
 
                         <div className="grid gap-4">
                             <div className="grid gap-2">
-                                <Label className={cn("text-xs font-bold uppercase tracking-widest", errors.title && "text-rose-500")}>BAŞLIK</Label>
+                                <Label className={cn("text-xs font-bold uppercase tracking-widest", errors.title && "text-rose-500")}>İŞLEM / BÜTÇE BAŞLIĞI</Label>
                                 <Input
                                     value={title}
                                     onChange={(e) => { setTitle(e.target.value); if (errors.title) setErrors(prev => ({ ...prev, title: false })); }}
-                                    placeholder="örneğin: Maaş, Kira, Market"
-                                    className={cn("h-11 rounded-lg", errors.title && "border-rose-500")}
+                                    placeholder="örneğin: Şubat 2026 Bütçesi"
+                                    className={cn("h-11 rounded-lg bg-white border-slate-200 focus:ring-slate-900", errors.title && "border-rose-500")}
                                 />
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {creationType === 'transaction' && (
+                                {creationType !== 'transaction' && (
                                     <div className="grid gap-2">
                                         <Label className={cn("text-xs font-bold uppercase tracking-widest", errors.amount && "text-rose-500")}>TUTAR</Label>
                                         <div className="relative">
@@ -680,24 +888,7 @@ export function TransactionModal() {
                                     </Button>
                                 </div>
 
-                                {/* Custom Field Pool Suggestions */}
-                                {customFieldPool.length > 0 && (
-                                    <div className="flex flex-wrap gap-2">
-                                        {customFieldPool.slice(0, 6).map(field => (
-                                            <Button
-                                                key={field.id}
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setCustomFields([...customFields, { id: `field-${Date.now()}`, label: field.label, value: '' }]);
-                                                }}
-                                                className="h-7 px-2 text-[10px] font-medium border-slate-200 bg-slate-50/50 hover:bg-slate-100 rounded-full"
-                                            >
-                                                + {field.label}
-                                            </Button>
-                                        ))}
-                                    </div>
-                                )}
+
 
                                 <div className="space-y-3">
                                     {customFields.map((field, index) => (
@@ -741,34 +932,141 @@ export function TransactionModal() {
 
                             <div className="grid gap-2">
                                 <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">KATEGORİ</Label>
-                                <Select>
-                                    <SelectTrigger className="h-11 border-slate-200">
+                                <Select
+                                    value={categoryId}
+                                    onValueChange={(val) => {
+                                        if (val === 'create_new') {
+                                            setIsCategoryModalOpen(true);
+                                        } else {
+                                            setCategoryId(val);
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger className="h-11 border-slate-200 w-full">
                                         <SelectValue placeholder="Kategori seçin" />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        <div className="p-1 mb-1 border-b border-slate-100">
+                                            <div
+                                                className="flex items-center gap-2 p-2 text-sm text-blue-600 rounded-sm hover:bg-blue-50 cursor-pointer font-medium transition-colors"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setIsCategoryModalOpen(true);
+                                                }}
+                                            >
+                                                <Plus className="h-4 w-4" />
+                                                <span>Yeni Kategori Ekle...</span>
+                                            </div>
+                                        </div>
                                         {categories.filter(c => c.type === type || c.type === 'both').map(cat => (
+                                            <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
+                                        ))}
+                                        {customCategories.filter(c => c.type === type || c.type === 'both').map(cat => (
                                             <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
+
+                                {/* Hidden Dialog just for the Modal, controlled by state */}
+                                <Dialog open={isCategoryModalOpen} onOpenChange={setIsCategoryModalOpen}>
+                                    <DialogContent className="sm:max-w-[400px]">
+                                        <DialogHeader>
+                                            <DialogTitle>Yeni Kategori Ekle</DialogTitle>
+                                        </DialogHeader>
+                                        <div className="space-y-4 py-4">
+                                            <div className="grid gap-2">
+                                                <Label>Kategori Adı</Label>
+                                                <Input
+                                                    placeholder="Örn: Market"
+                                                    value={newCategoryName}
+                                                    onChange={(e) => setNewCategoryName(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label>Tür</Label>
+                                                <Select value={newCategoryType} onValueChange={(v: any) => setNewCategoryType(v)}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="income">Gelir</SelectItem>
+                                                        <SelectItem value="expense">Gider</SelectItem>
+                                                        <SelectItem value="both">Her İkisi</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div className="flex gap-2">
+                                                <Button variant="outline" className="flex-1" onClick={() => setIsCategoryModalOpen(false)}>İptal</Button>
+                                                <Button onClick={handleAddCategory} className="flex-1 bg-slate-900 text-white">Ekle</Button>
+                                            </div>
+
+                                            {/* List of Custom Categories for Deletion */}
+                                            {customCategories.length > 0 && (
+                                                <div className="pt-4 border-t border-slate-100 space-y-2">
+                                                    <Label className="text-[10px] font-bold text-slate-400 uppercase">ÖZEL KATEGORİLERİ YÖNET</Label>
+                                                    <div className="grid gap-2">
+                                                        {customCategories.map(cat => (
+                                                            <div key={cat.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color || '#10b981' }} />
+                                                                    <span className="text-xs font-medium">{cat.label}</span>
+                                                                </div>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-rose-50"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        e.stopPropagation();
+                                                                        console.log('Attempting to delete category:', cat.id);
+                                                                        removeCustomCategory(cat.id);
+                                                                        toast.success(`"${cat.label}" kategorisi silindi`);
+                                                                        if (categoryId === cat.id) setCategoryId('');
+                                                                    }}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </DialogContent>
+                                </Dialog>
                             </div>
 
                             <div className="grid gap-2">
-                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">KATEGORİ RENGİ</Label>
-                                <div className="flex items-center gap-3 py-1">
-                                    {colors.map((color) => (
-                                        <button
-                                            key={color.name}
-                                            onClick={() => setSelectedColor(color.name)}
-                                            className={cn(
-                                                "w-8 h-8 rounded-full transition-all flex items-center justify-center",
-                                                color.class,
-                                                selectedColor === color.name ? "ring-2 ring-offset-2 ring-slate-900 scale-110" : "opacity-80"
-                                            )}
+                                <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">KART RENGİ</Label>
+                                <div className="flex items-center gap-4 py-2">
+                                    <div className="relative flex items-center gap-3 group cursor-pointer">
+                                        <div
+                                            className="w-10 h-10 rounded-full border border-slate-200 shadow-sm transition-transform group-hover:scale-105 flex items-center justify-center overflow-hidden"
+                                            style={{ backgroundColor: selectedColor }}
                                         >
-                                            {selectedColor === color.name && <Check className="h-4 w-4 text-white" />}
-                                        </button>
-                                    ))}
+                                            <Input
+                                                type="color"
+                                                value={selectedColor.startsWith('#') ? selectedColor : '#10b981'}
+                                                onChange={(e) => setSelectedColor(e.target.value)}
+                                                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full border-0 p-0"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors">
+                                                Rengi Değiştir
+                                            </span>
+                                            <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">
+                                                {selectedColor}
+                                            </span>
+                                        </div>
+                                        <Input
+                                            type="color"
+                                            value={selectedColor.startsWith('#') ? selectedColor : '#10b981'}
+                                            onChange={(e) => setSelectedColor(e.target.value)}
+                                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full border-0 p-0"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -849,15 +1147,26 @@ export function TransactionModal() {
 
                             <div className="grid gap-2">
                                 <Label className="text-xs font-bold text-slate-500 uppercase tracking-widest">NOTLAR</Label>
-                                <Textarea placeholder="İşlem ile ilgili detaylı not ekleyin..." className="min-h-[80px] resize-none" />
+                                <Textarea
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    placeholder="İşlem ile ilgili detaylı not ekleyin..."
+                                    className="min-h-[80px] resize-none"
+                                />
                             </div>
                         </div>
 
                         {/* Live Preview / Charts Section */}
-                        <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-4 shadow-xl">
+                        <div
+                            className="p-4 rounded-2xl space-y-4 shadow-xl transition-all duration-500 ease-in-out"
+                            style={{
+                                backgroundColor: selectedColor,
+                                color: getContrastColor(selectedColor)
+                            }}
+                        >
                             <div className="flex items-center justify-between">
-                                <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Canlı Önizleme</h4>
-                                <div className="flex items-center gap-1 text-emerald-400">
+                                <h4 className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-60">Canlı Önizleme</h4>
+                                <div className="flex items-center gap-1 opacity-80">
                                     <div className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
                                     <span className="text-[8px] font-bold uppercase">Canlı</span>
                                 </div>
@@ -876,7 +1185,8 @@ export function TransactionModal() {
                                     debts,
                                     steps,
                                     amount: parseFloat(amount) || 0,
-                                    transactionType: type
+                                    transactionType: type,
+                                    color: selectedColor
                                 }}
                             />
                         </div>
@@ -891,7 +1201,7 @@ export function TransactionModal() {
                 <Button variant="ghost" onClick={() => setTransactionModalOpen(false)} className="flex-1 h-12 text-slate-600 font-semibold sm:order-1">İptal</Button>
                 <Button onClick={handleSave} className="flex-1 h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold sm:order-2">Kaydet</Button>
             </div>
-        </div>
+        </div >
     );
 
     if (isMobile) {

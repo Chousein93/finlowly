@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useId } from 'react';
 import { Sidebar } from './sidebar';
 import { RightPanel } from './right-panel';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeData, setActiveData] = useState<any>(null);
+  const dndContextId = useId();
 
   const {
     addToLibrary,
@@ -72,6 +73,118 @@ export function AppLayout({ children }: AppLayoutProps) {
     setActiveDrag(id, type);
   };
 
+  // Helper function to handle library item drag end
+  const handleLibraryItemDragEnd = (active: any, over: any) => {
+    if (over.data.current?.type === 'folder') {
+      const folderId = over.data.current.folderId;
+      const folder = libraryFolders.find(f => f.id === folderId);
+      moveIntoFolder(active.data.current.template.id, folderId);
+      toast.success(`Şablon "${folder?.name || 'Klasör'}" içine taşındı`);
+      return true;
+    } else if (over.id === 'library-drop-zone') {
+      moveIntoFolder(active.data.current.template.id, null);
+      toast.success('Şablon klasörden çıkarıldı');
+      return true;
+    }
+    return false;
+  };
+
+  // Helper function to handle sidebar reorder
+  const handleSidebarReorder = (active: any, over: any) => {
+    const activeViewId = active.data.current.viewId;
+    const overViewId = over.data.current.viewId;
+
+    const oldIndex = sidebarOrder.indexOf(activeViewId);
+    const newIndex = sidebarOrder.indexOf(overViewId);
+
+    const newOrder = [...sidebarOrder];
+    const [removed] = newOrder.splice(oldIndex, 1);
+    newOrder.splice(newIndex, 0, removed);
+
+    reorderSidebar(newOrder);
+    return true;
+  };
+
+  // Helper function to handle template reorder
+  const handleTemplateReorder = (active: any, over: any) => {
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    const oldIndex = templatesOrder.indexOf(activeId);
+    const newIndex = templatesOrder.indexOf(overId);
+
+    const newOrder = [...templatesOrder];
+    const [removed] = newOrder.splice(oldIndex, 1);
+    newOrder.splice(newIndex, 0, removed);
+
+    reorderTemplates(newOrder);
+    return true;
+  };
+
+  // Helper function to handle dashboard widget reorder
+  const handleWidgetReorder = (active: any, over: any) => {
+    const oldIndex = dashboardWidgets.findIndex((w) => w.id === active.id);
+    const newIndex = dashboardWidgets.findIndex((w) => w.id === over.id);
+
+    const newWidgets = [...dashboardWidgets];
+    const [removed] = newWidgets.splice(oldIndex, 1);
+    newWidgets.splice(newIndex, 0, removed);
+
+    reorderWidgets(newWidgets);
+    return true;
+  };
+
+  // Helper function to handle library item reorder
+  const handleLibraryItemReorder = (active: any, over: any) => {
+    const activeTemplateId = active.data.current.template.id;
+    const overTemplateId = over.data.current.template.id;
+
+    // Check if reordering within a folder
+    const folder = libraryFolders.find(f => f.itemIds.includes(activeTemplateId));
+    const overFolder = libraryFolders.find(f => f.itemIds.includes(overTemplateId));
+
+    if (folder && overFolder && folder.id === overFolder.id) {
+      // Within the same folder
+      const oldIndex = folder.itemIds.indexOf(activeTemplateId);
+      const newIndex = folder.itemIds.indexOf(overTemplateId);
+
+      const newItemIds = [...folder.itemIds];
+      const [removed] = newItemIds.splice(oldIndex, 1);
+      newItemIds.splice(newIndex, 0, removed);
+
+      reorderFolderItems(folder.id, newItemIds);
+      return true;
+    } else if (!folder && !overFolder) {
+      // Both items are uncategorized
+      const oldIndex = libraryTemplates.findIndex(t => t.id === activeTemplateId);
+      const newIndex = libraryTemplates.findIndex(t => t.id === overTemplateId);
+
+      const newTemplates = [...libraryTemplates];
+      const [removed] = newTemplates.splice(oldIndex, 1);
+      newTemplates.splice(newIndex, 0, removed);
+
+      reorderLibraryTemplates(newTemplates);
+      return true;
+    }
+    return false;
+  };
+
+  // Helper function to handle trash item reorder
+  const handleTrashItemReorder = (active: any, over: any) => {
+    const activeId = active.data.current.item.id;
+    const overId = over.data.current.item.id;
+
+    const oldIndex = deletedItems.findIndex(i => i.id === activeId);
+    const newIndex = deletedItems.findIndex(i => i.id === overId);
+
+    const newDeletedItems = [...deletedItems];
+    const [removed] = newDeletedItems.splice(oldIndex, 1);
+    newDeletedItems.splice(newIndex, 0, removed);
+
+    reorderDeletedItems(newDeletedItems);
+    return true;
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { over, active } = event;
 
@@ -83,118 +196,46 @@ export function AppLayout({ children }: AppLayoutProps) {
       return;
     }
 
-    // SCENARIO 4: KÜTÜPHANE ÖĞESİ -> KLASÖR veya Klasörden Dışarı
+    // Early return if no valid drop target
+    if (!active.data.current?.type) {
+      return;
+    }
+
+    // Handle library item operations (most common)
     if (active.data.current?.type === 'library-item') {
-      if (over.data.current?.type === 'folder') {
-        const folderId = over.data.current.folderId;
-        const folder = libraryFolders.find(f => f.id === folderId);
-        moveIntoFolder(active.data.current.template.id, folderId);
-        toast.success(`Şablon "${folder?.name || 'Klasör'}" içine taşındı`);
-        return;
-      } else if (over.id === 'library-drop-zone') {
-        moveIntoFolder(active.data.current.template.id, null);
-        toast.success('Şablon klasörden çıkarıldı');
-        return;
-      }
+      if (handleLibraryItemDragEnd(active, over)) return;
+      if (handleLibraryItemReorder(active, over)) return;
+      return;
     }
 
-    // SCENARIO 5: SIDEBAR REORDER
+    // Handle sidebar reorder
     if (active.data.current?.type === 'sidebar-item' && over.data.current?.type === 'sidebar-item' && active.id !== over.id) {
-      const activeViewId = active.data.current.viewId;
-      const overViewId = over.data.current.viewId;
-
-      const oldIndex = sidebarOrder.indexOf(activeViewId);
-      const newIndex = sidebarOrder.indexOf(overViewId);
-
-      const newOrder = [...sidebarOrder];
-      const [removed] = newOrder.splice(oldIndex, 1);
-      newOrder.splice(newIndex, 0, removed);
-
-      reorderSidebar(newOrder);
+      handleSidebarReorder(active, over);
       return;
     }
 
-    // SCENARIO 6: TEMPLATE REORDER
+    // Handle template reorder
     if (active.data.current?.type === 'template' && over.data.current?.type === 'template' && active.id !== over.id) {
-      const activeId = active.id as string;
-      const overId = over.id as string;
-
-      const oldIndex = templatesOrder.indexOf(activeId);
-      const newIndex = templatesOrder.indexOf(overId);
-
-      const newOrder = [...templatesOrder];
-      const [removed] = newOrder.splice(oldIndex, 1);
-      newOrder.splice(newIndex, 0, removed);
-
-      reorderTemplates(newOrder);
+      handleTemplateReorder(active, over);
       return;
     }
 
-    // SCENARIO 3: DASHBOARD İÇİ REORDER
+    // Handle dashboard widget reorder
     if (active.data.current?.type === 'widget' && over.data.current?.type === 'widget' && active.id !== over.id) {
-      const oldIndex = dashboardWidgets.findIndex((w) => w.id === active.id);
-      const newIndex = dashboardWidgets.findIndex((w) => w.id === over.id);
-
-      const newWidgets = [...dashboardWidgets];
-      const [removed] = newWidgets.splice(oldIndex, 1);
-      newWidgets.splice(newIndex, 0, removed);
-
-      reorderWidgets(newWidgets);
+      handleWidgetReorder(active, over);
       return;
     }
 
-    // SCENARIO 9: KÜTÜPHANE ÖĞESİ REORDER
-    if (active.data.current?.type === 'library-item' && over.data.current?.type === 'library-item' && active.id !== over.id) {
-      const activeTemplateId = active.data.current.template.id;
-      const overTemplateId = over.data.current.template.id;
-
-      // Check if reordering within a folder
-      const folder = libraryFolders.find(f => f.itemIds.includes(activeTemplateId));
-      const overFolder = libraryFolders.find(f => f.itemIds.includes(overTemplateId));
-
-      if (folder && overFolder && folder.id === overFolder.id) {
-        // Within the same folder
-        const oldIndex = folder.itemIds.indexOf(activeTemplateId);
-        const newIndex = folder.itemIds.indexOf(overTemplateId);
-
-        const newItemIds = [...folder.itemIds];
-        const [removed] = newItemIds.splice(oldIndex, 1);
-        newItemIds.splice(newIndex, 0, removed);
-
-        reorderFolderItems(folder.id, newItemIds);
-      } else if (!folder && !overFolder) {
-        // Both items are uncategorized
-        const oldIndex = libraryTemplates.findIndex(t => t.id === activeTemplateId);
-        const newIndex = libraryTemplates.findIndex(t => t.id === overTemplateId);
-
-        const newTemplates = [...libraryTemplates];
-        const [removed] = newTemplates.splice(oldIndex, 1);
-        newTemplates.splice(newIndex, 0, removed);
-
-        reorderLibraryTemplates(newTemplates);
-      }
-      return;
-    }
-
-    // SCENARIO 10: TRASH ITEM REORDER
+    // Handle trash item reorder
     if (active.data.current?.type === 'trash-item' && over.data.current?.type === 'trash-item' && active.id !== over.id) {
-      const activeId = active.data.current.item.id;
-      const overId = over.data.current.item.id;
-
-      const oldIndex = deletedItems.findIndex(i => i.id === activeId);
-      const newIndex = deletedItems.findIndex(i => i.id === overId);
-
-      const newDeletedItems = [...deletedItems];
-      const [removed] = newDeletedItems.splice(oldIndex, 1);
-      newDeletedItems.splice(newIndex, 0, removed);
-
-      reorderDeletedItems(newDeletedItems);
+      handleTrashItemReorder(active, over);
       return;
     }
   };
 
   return (
     <DndContext
+      id={dndContextId}
       sensors={sensors}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}

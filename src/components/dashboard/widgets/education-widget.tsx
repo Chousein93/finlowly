@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle2, Circle, BookOpen, GraduationCap } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+
 import { useAppStore, DashboardWidget } from '@/store/use-app-store';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -48,10 +49,32 @@ export function EducationWidget({ widget }: { widget: DashboardWidget }) {
                         <p className="text-xs font-bold text-slate-900 mt-0.5">% {progress.toFixed(0)} Tamamlandı</p>
                     </div>
                 </div>
+                {/* Donut Chart for Progress */}
+                <div className="h-10 w-10">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                                data={[
+                                    { value: completedCount, fill: '#3b82f6' },
+                                    { value: steps.length - completedCount, fill: '#e2e8f0' }
+                                ]}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={12}
+                                outerRadius={18}
+                                dataKey="value"
+                                startAngle={90}
+                                endAngle={-270}
+                            >
+                                <Cell key="completed" fill="#3b82f6" />
+                                <Cell key="remaining" fill="#e2e8f0" />
+                            </Pie>
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
             </div>
 
-            {/* Progress Bar */}
-            <Progress value={progress} className="h-1.5 bg-slate-100" indicatorClassName="bg-blue-500" />
+
 
             {/* Steps List */}
             <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
